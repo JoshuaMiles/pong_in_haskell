@@ -21,8 +21,8 @@
       <file leaf-file-name="Main.hs" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/Main.hs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="431">
-              <caret line="91" column="17" lean-forward="false" selection-start-line="90" selection-start-column="11" selection-end-line="91" selection-end-column="17" />
+            <state relative-caret-position="326">
+              <caret line="85" column="0" lean-forward="true" selection-start-line="85" selection-start-column="0" selection-end-line="85" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -61,7 +61,7 @@
     <sorting>DEFINITION_ORDER</sorting>
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="646" />
+    <option name="x" value="640" />
     <option name="y" value="23" />
     <option name="width" value="640" />
     <option name="height" value="704" />
@@ -583,15 +583,15 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1483331628043</updated>
-      <workItem from="1483331629657" duration="6236000" />
+      <workItem from="1483331629657" duration="6964000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="6236000" />
+    <option name="totallyTimeSpent" value="6964000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="646" y="23" width="640" height="704" extended-state="0" />
+    <frame x="640" y="23" width="640" height="704" extended-state="0" />
     <editor active="true" />
     <layout>
       <window_info id="Palette" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
@@ -637,8 +637,8 @@
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/Main.hs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="431">
-          <caret line="91" column="17" lean-forward="false" selection-start-line="90" selection-start-column="11" selection-end-line="91" selection-end-column="17" />
+        <state relative-caret-position="326">
+          <caret line="85" column="0" lean-forward="true" selection-start-line="85" selection-start-column="0" selection-end-line="85" selection-end-column="0" />
           <folding />
         </state>
       </provider>
