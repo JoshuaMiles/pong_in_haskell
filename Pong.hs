@@ -27,6 +27,7 @@ data State = State {
 main :: IO State
 main = clearScreen
     >> initialState
+    >>= (iterateUntilM gameOver step)
 
 vectorFromChar :: Maybe Char -> Maybe Vector
 vectorFromChar (Just 'w') = Just ( 0,  1)
@@ -34,6 +35,11 @@ vectorFromChar (Just 's') = Just ( 0, -1)
 vectorFromChar (Just 'l') = Just ( 0, -1)
 vectorFromChar (Just 'o') = Just ( 0,  1)
 vectorFromChar _          = Nothing
+
+displayState :: State -> IO State
+displayState state = setCursorPosition 0 0 
+    >> putStr (render state) 
+    >> return state
 
 render :: State -> String
 render state = unlines $ applyBorder (board state)
@@ -65,6 +71,16 @@ getInput = hSetEcho stdin False
     >> hSetBuffering stdin NoBuffering
     >> getChar
 
+gameOver :: State -> Bool
+gameOver (State {
+    board = boardSize,
+    ball = (currentBall@(ballX, ballY))
+})
+    | ballX >= boardSize || ballX < 0 = True
+    | ballY >= boardSize || ballY < 0 = True
+    | otherwise                       = False
+
+
 oneSecond :: Int
 oneSecond = (10 :: Int) ^ (6 :: Int)
 
@@ -81,16 +97,44 @@ initialState = getStdGen
         move = Just (2,1)
     }
 
-applyMove :: Vector -> Vector -> Vector
-applyMove (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
-
 bounce :: Vector -> Vector
 bounce (x, y) = (-x,y)
 
+updateMove :: State -> Maybe Vector -> State
+updateMove state@(State { move = Just vector }) inputMove@(Just inputVector)
+    | inputVector == vectorOpposite vector  = state
+    | otherwise = state { move = inputMove <|> move state }
+updateMove state _ = state
+
+vectorOpposite :: Vector -> Vector
+vectorOpposite (x, y) = (-x, -y)
+
+applyMove :: Vector -> Vector -> Vector
+applyMove (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
+
 updateBall :: State -> State
-updateBall state@(State{ move = (Just vector)})
-    = state { ball = ball state `applyMove` move state }
-updateBall state = state
+updateBall state@(State{ move = (Just vector)}) =
+ state { ball = ball state `applyMove` vector : ball state }
+-- updateBall state = state
 
 buildBoard :: Int -> [[(Int,Int)]]
 buildBoard size = [[(x, y) | x <- [0 .. size - 1]] | y <- reverse [0 .. size - 1 ]]
+
+
+step :: State -> IO State
+step state = sample sampleLength getInput 
+    >>= \ inputMove ->
+        displayState $ updateState state (vectorFromChar inputMove)
+
+updateState :: State -> Maybe Vector -> State
+updateState state inputMove
+    = updateBall 
+
+
+sample :: Int -> IO a -> IO (Maybe a)
+sample sampleLength getInput
+    | sampleLength <  0    = fmap Just getInput
+    | sampleLength == 0    = return Nothing
+    | otherwise =
+        concurrently (timeout sampleLength getInput) (threadDelay sampleLength) 
+            >>= \ (result, _) -> return result

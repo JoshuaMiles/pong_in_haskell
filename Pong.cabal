@@ -1,0 +1,18 @@
+Name:          Pong in Haskell
+Version:       1.0.0
+Cabal-Version: >= 1.2
+License:       BSD3
+Author:        Joshua Miles
+Homepage:      https://github.com/beckyconning/haskell-snake
+Category:      Games
+Synopsis:    
+Build-type:    Simple
+
+Executable Pong
+  Build-Depends: base >= 4.6.0.1,
+                 monad-loops >= 0.4.2.1,
+                 ansi-terminal >= 0.5,
+                 async >= 2.0.1.5,
+                 random >= 1.0.1.1
+  Main-Is:       Pong.hs
+  Ghc-Options:   -Wall
