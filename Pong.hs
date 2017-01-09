@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -Wunused-matches #-}
 
 import Data.List
 
@@ -18,9 +18,11 @@ type Vector = (Int, Int)
 data State = State {
     board :: Int,
     player1 :: [Vector],
+    player1Movement :: Maybe Vector,
     player2 :: [Vector],
+    player2Movement :: Maybe Vector,
     ball :: Vector,
-    move  :: Maybe Vector
+    ballMovement  :: Maybe Vector
 } deriving Show
 
 
@@ -29,12 +31,12 @@ main = clearScreen
     >> initialState
     >>= (iterateUntilM gameOver step)
 
-vectorFromChar :: Maybe Char -> Maybe Vector
-vectorFromChar (Just 'w') = Just ( 0,  1)
-vectorFromChar (Just 's') = Just ( 0, -1)
-vectorFromChar (Just 'l') = Just ( 0, -1)
-vectorFromChar (Just 'o') = Just ( 0,  1)
-vectorFromChar _          = Nothing
+userInputChar :: Maybe Char -> Maybe Vector
+userInputChar (Just 'a')  = Just ( -1,  0)
+userInputChar (Just 's') = Just ( 1, 0)
+userInputChar (Just 'k') = Just ( -1, 0)
+userInputChar (Just 'l') = Just ( 1,  0)
+userInputChar _          = Just ( 0, 0)
 
 displayState :: State -> IO State
 displayState state = setCursorPosition 0 0 
@@ -54,11 +56,14 @@ applyBorder size renderedRows
 renderRow :: State -> [Vector] -> String
 renderRow state = map (characterForPosition state)
 
+buildBoard :: Int -> [[Vector]]
+buildBoard size = [[(x, y) | x <- [0 .. size - 1]] | y <- [0 .. size - 1 ]]
+
 characterForPosition :: State -> Vector -> Char
 characterForPosition state position
-    | position `elem` player1 state            = '#'
-    | position `elem` player2 state            = '#'
-    | ball state `ballPositionEquals` position = '@'
+    | position `elem` player1 state            = '_'
+    | position `elem` player2 state            = '_'
+    | ball state `ballPositionEquals` position = 'O'
     | otherwise                                = ' '
 
 ballPositionEquals :: Vector -> Vector -> Bool
@@ -76,8 +81,7 @@ gameOver (State {
     board = boardSize,
     ball = (currentBall@(ballX, ballY))
 })
---     | ballX >= boardSize || ballX < 0 = True
---     | ballY >= boardSize || ballY < 0 = True
+    | ballY >= boardSize || ballY < 0 = True
     | otherwise                       = False
 
 
@@ -90,45 +94,65 @@ sampleLength = oneSecond `div` 4
 initialState :: IO State
 initialState = getStdGen
     >>= \stdGen -> return State {
-        board = 15,
-        player1 = [(1,4),(1,5),(1,6)],
-        player2 = [(10,4),(10,5),(10,6)],
+        board = 30,
+        player1 = [((ceiling(30/2)-1),2),(ceiling(30/2),2),((ceiling(30/2)+1),2)],
+        player1Movement = Just (0,0),
+        player2 = [(ceiling(30/2)-1,28),(ceiling(30/2),28),(ceiling(30/2)+1,28)],
+        player2Movement = Just (0,0),
         ball = (5,5),
-        move = Just (2,1)
+        ballMovement = Just (1,1)
     }
 
 bounce :: Vector -> Vector
 bounce (x, y) = (-x,y)
 
+-- Need to distinguish between player 1 and player 2
 updateMove :: State -> Maybe Vector -> State
-updateMove state@(State { move = Just vector }) inputMove@(Just inputVector)
-    | inputVector == vectorOpposite vector  = state
-    | otherwise = state { move = inputMove <|> move state }
+updateMove state userInputMove@(Just inputVector) =
+    state {
+        player1Movement = userInputMove <|> player1Movement state,
+        player2Movement = userInputMove <|> player2Movement state
+        }
 updateMove state _ = state
 
 vectorOpposite :: Vector -> Vector
 vectorOpposite (x, y) = (-x, -y)
 
-applyMove :: Vector -> Vector -> Vector
-applyMove (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
+move :: Vector -> Vector -> Vector
+move (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
+
+applyMovement :: Vector -> [Vector] -> [Vector]
+applyMovement movement vector =
+    map (move movement) vector
+
+
+checkIfBallIsTouchingWall :: State -> Bool
+checkIfBallIsTouchingWall (State {
+                              board = boardSize,
+                              ball = (currentBall@(ballX, ballY))
+                          })
+                          | ballX >= boardSize || ballX <= 0  = True
+                          | ballY >= boardSize || ballY >= 0 = True
+                          | otherwise = False
 
 updateBall :: State -> State
-updateBall state@(State{ move = (Just vector)}) =
- state { ball = ball state `applyMove` vector }
+updateBall state@(State{ ballMovement = (Just vector)})
+    | checkIfBallIsTouchingWall state = state { ball = ball state `move` bounce vector }
+    | otherwise = state { ball = ball state `move` vector }
 -- updateBall state = state
 
-buildBoard :: Int -> [[(Int,Int)]]
-buildBoard size = [[(x, y) | x <- [0 .. size - 1]] | y <- reverse [0 .. size - 1 ]]
-
+updatePlayers :: State -> State
+updatePlayers state@(State{ player1Movement = Just player1Vector, player2Movement = Just player2Vector}) =
+    state { player1 = applyMovement player1Vector (player1 state), player2 = applyMovement player2Vector (player2 state)}
 
 step :: State -> IO State
 step state = sample sampleLength getInput 
-    >>= \ inputMove ->
-        displayState $ updateState state (vectorFromChar inputMove)
+    >>= \ userInputMove ->
+        displayState $ updateState state (userInputChar userInputMove)
 
 updateState :: State -> Maybe Vector -> State
-updateState state inputMove
-    = updateBall state
+updateState state userInputMove
+    = updateBall $ updatePlayers $ updateMove state userInputMove
 
 
 sample :: Int -> IO a -> IO (Maybe a)
