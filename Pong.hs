@@ -48,8 +48,8 @@ render state = unlines $ applyBorder (board state)
 
 applyBorder :: Int -> [String] -> [String]
 applyBorder size renderedRows
-    = border ++ map (\row -> "X" ++ row ++ "X") renderedRows ++ border
-        where border = [replicate ( size + 2 ) 'X' ]
+    = border ++ map (\row -> "|" ++ row ++ "|") renderedRows ++ border
+        where border = [replicate ( size + 2 ) '_' ]
 
 renderRow :: State -> [Vector] -> String
 renderRow state = map (characterForPosition state)
@@ -76,8 +76,8 @@ gameOver (State {
     board = boardSize,
     ball = (currentBall@(ballX, ballY))
 })
-    | ballX >= boardSize || ballX < 0 = True
-    | ballY >= boardSize || ballY < 0 = True
+--     | ballX >= boardSize || ballX < 0 = True
+--     | ballY >= boardSize || ballY < 0 = True
     | otherwise                       = False
 
 
@@ -114,7 +114,7 @@ applyMove (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
 
 updateBall :: State -> State
 updateBall state@(State{ move = (Just vector)}) =
- state { ball = ball state `applyMove` vector : ball state }
+ state { ball = ball state `applyMove` vector }
 -- updateBall state = state
 
 buildBoard :: Int -> [[(Int,Int)]]
@@ -128,7 +128,7 @@ step state = sample sampleLength getInput
 
 updateState :: State -> Maybe Vector -> State
 updateState state inputMove
-    = updateBall 
+    = updateBall state
 
 
 sample :: Int -> IO a -> IO (Maybe a)
