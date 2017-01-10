@@ -15,12 +15,17 @@ import Control.Applicative
 
 type Vector = (Int, Int)
 
+-- TODO make this neater, split the players into two different data structures or type?
 data State = State {
     board :: Int,
     player1 :: [Vector],
     player1Movement :: Maybe Vector,
+    player1Score :: Int,
+    player1Lives :: Int,
     player2 :: [Vector],
     player2Movement :: Maybe Vector,
+    player2Score :: Int,
+    player2Lives :: Int,
     ball :: Vector,
     ballMovement  :: Maybe Vector
 } deriving Show
@@ -76,10 +81,10 @@ getInput = hSetEcho stdin False
     >> hSetBuffering stdin NoBuffering
     >> getChar
 
+-- Change this so that game over when out of lives, not when ball touches
 gameOver :: State -> Bool
 gameOver (State {
-    board = boardSize,
-    ball = (currentBall@(ballX, ballY))
+
 })
     | ballY >= boardSize || ballY < 0 = True
     | otherwise                       = False
@@ -97,8 +102,12 @@ initialState = getStdGen
         board = 30,
         player1 = [((ceiling(30/2)-1),2),(ceiling(30/2),2),((ceiling(30/2)+1),2)],
         player1Movement = Just (0,0),
+        player1Score = 0,
+        player1Lives = 0,
         player2 = [(ceiling(30/2)-1,28),(ceiling(30/2),28),(ceiling(30/2)+1,28)],
         player2Movement = Just (0,0),
+        player2Score = 0,
+        playerLives = 0,
         ball = (5,5),
         ballMovement = Just (1,1)
     }
@@ -107,6 +116,7 @@ bounce :: Vector -> Vector
 bounce (x, y) = (-x,y)
 
 -- Need to distinguish between player 1 and player 2
+
 updateMove :: State -> Maybe Vector -> State
 updateMove state userInputMove@(Just inputVector) =
     state {
@@ -145,6 +155,7 @@ updatePlayers :: State -> State
 updatePlayers state@(State{ player1Movement = Just player1Vector, player2Movement = Just player2Vector}) =
     state { player1 = applyMovement player1Vector (player1 state), player2 = applyMovement player2Vector (player2 state)}
 
+-- TODO here is where you should start to distinguish between the two
 step :: State -> IO State
 step state = sample sampleLength getInput 
     >>= \ userInputMove ->
