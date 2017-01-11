@@ -15,17 +15,18 @@ import Control.Applicative
 
 type Vector = (Int, Int)
 
--- TODO make this neater, split the players into two different data structures or type?
+data Player = Player {
+        position :: [Vector],
+        movement :: Maybe Vector,
+        score :: Int,
+        lives :: Int
+} deriving Show
+
+
 data State = State {
     board :: Int,
-    player1 :: [Vector],
-    player1Movement :: Maybe Vector,
-    player1Score :: Int,
-    player1Lives :: Int,
-    player2 :: [Vector],
-    player2Movement :: Maybe Vector,
-    player2Score :: Int,
-    player2Lives :: Int,
+    player1 :: Player,
+    player2 :: Player,
     ball :: Vector,
     ballMovement  :: Maybe Vector
 } deriving Show
@@ -33,15 +34,19 @@ data State = State {
 
 main :: IO State
 main = clearScreen
-    >> initialState
+    -- Treating the initial players as arguments
+    >> initialState initialPlayer1 initialPlayer2
     >>= (iterateUntilM gameOver step)
 
-userInputChar :: Maybe Char -> Maybe Vector
-userInputChar (Just 'a')  = Just ( -1,  0)
-userInputChar (Just 's') = Just ( 1, 0)
-userInputChar (Just 'k') = Just ( -1, 0)
-userInputChar (Just 'l') = Just ( 1,  0)
-userInputChar _          = Just ( 0, 0)
+player1InputChar :: Maybe Char -> Maybe Vector
+player1InputChar (Just 'a')  = Just ( -1, 0)
+player1InputChar (Just 's') = Just ( 1, 0)
+player1InputChar _          = Just ( 0, 0)
+
+player2InputChar :: Maybe Char -> Maybe Vector
+player2InputChar (Just 'k') = Just ( -1, 0)
+player2InputChar (Just 'l') = Just ( 1,  0)
+player2InputChar _          = Just ( 0, 0)
 
 displayState :: State -> IO State
 displayState state = setCursorPosition 0 0 
@@ -64,17 +69,20 @@ renderRow state = map (characterForPosition state)
 buildBoard :: Int -> [[Vector]]
 buildBoard size = [[(x, y) | x <- [0 .. size - 1]] | y <- [0 .. size - 1 ]]
 
+getPosition :: Player -> [Vector]
+getPosition player =
+    position player
+
 characterForPosition :: State -> Vector -> Char
-characterForPosition state position
-    | position `elem` player1 state            = '_'
-    | position `elem` player2 state            = '_'
-    | ball state `ballPositionEquals` position = 'O'
-    | otherwise                                = ' '
+characterForPosition state@(State{player1 = player1Variable, player2 = player2Variable}) position
+    | position `elem`  getPosition player1Variable       = '_'
+    | position `elem`  getPosition player2Variable       = '_'
+    | ball state `ballPositionEquals` position       = 'O'
+    | otherwise                                      = ' '
 
 ballPositionEquals :: Vector -> Vector -> Bool
-ballPositionEquals position vector = position == vector
+ballPositionEquals position vector             = position == vector
 ballPositionEquals _ _                         = False
-
 
 getInput :: IO Char
 getInput = hSetEcho stdin False
@@ -83,12 +91,10 @@ getInput = hSetEcho stdin False
 
 -- Change this so that game over when out of lives, not when ball touches
 gameOver :: State -> Bool
-gameOver (State {
-
-})
-    | ballY >= boardSize || ballY < 0 = True
-    | otherwise                       = False
-
+gameOver state@(State{player1 = player1Variable, player2 = player2Variable})
+       | lives player1Variable <= 0 = True
+       | lives player2Variable <= 0 = True
+       | otherwise = False
 
 oneSecond :: Int
 oneSecond = (10 :: Int) ^ (6 :: Int)
@@ -96,34 +102,32 @@ oneSecond = (10 :: Int) ^ (6 :: Int)
 sampleLength :: Int
 sampleLength = oneSecond `div` 4
 
-initialState :: IO State
-initialState = getStdGen
+initialState :: Player -> Player -> IO State
+initialState player1Variable player2Variable = getStdGen
     >>= \stdGen -> return State {
         board = 30,
-        player1 = [((ceiling(30/2)-1),2),(ceiling(30/2),2),((ceiling(30/2)+1),2)],
-        player1Movement = Just (0,0),
-        player1Score = 0,
-        player1Lives = 0,
-        player2 = [(ceiling(30/2)-1,28),(ceiling(30/2),28),(ceiling(30/2)+1,28)],
-        player2Movement = Just (0,0),
-        player2Score = 0,
-        playerLives = 0,
+        player1 = player1Variable,
+        player2 = player2Variable,
         ball = (5,5),
         ballMovement = Just (1,1)
     }
 
+initialPlayer1 = Player {
+    position = [((ceiling(30/2)-1),2),(ceiling(30/2),2),((ceiling(30/2)+1),2)],
+    movement = Just (0,0),
+    score = 0,
+    lives = 3
+}
+
+initialPlayer2 = Player {
+   position =  [(ceiling(30/2)-1,28),(ceiling(30/2),28),(ceiling(30/2)+1,28)],
+   movement = Just (0,0),
+   score = 0,
+   lives = 3
+}
+
 bounce :: Vector -> Vector
 bounce (x, y) = (-x,y)
-
--- Need to distinguish between player 1 and player 2
-
-updateMove :: State -> Maybe Vector -> State
-updateMove state userInputMove@(Just inputVector) =
-    state {
-        player1Movement = userInputMove <|> player1Movement state,
-        player2Movement = userInputMove <|> player2Movement state
-        }
-updateMove state _ = state
 
 vectorOpposite :: Vector -> Vector
 vectorOpposite (x, y) = (-x, -y)
@@ -136,6 +140,7 @@ applyMovement movement vector =
     map (move movement) vector
 
 
+-- TODO doesnt work, ball is bouncing off of just before wall moving and than coming back
 checkIfBallIsTouchingWall :: State -> Bool
 checkIfBallIsTouchingWall (State {
                               board = boardSize,
@@ -149,22 +154,36 @@ updateBall :: State -> State
 updateBall state@(State{ ballMovement = (Just vector)})
     | checkIfBallIsTouchingWall state = state { ball = ball state `move` bounce vector }
     | otherwise = state { ball = ball state `move` vector }
--- updateBall state = state
+updateBall state = state
 
-updatePlayers :: State -> State
-updatePlayers state@(State{ player1Movement = Just player1Vector, player2Movement = Just player2Vector}) =
-    state { player1 = applyMovement player1Vector (player1 state), player2 = applyMovement player2Vector (player2 state)}
+-- I want this to be the function that is used to update the player
+-- To do, where to update the players already inside of the state ?
+-- updatePlayers :: State -> State
+-- updatePlayers state@(State{player1 = player1Variable, player2 = player2Variable})
+--     state { player1 = applyMovement movement position player1Variable  , player2 = applyMovement movement position player2Variable }
 
 -- TODO here is where you should start to distinguish between the two
 step :: State -> IO State
 step state = sample sampleLength getInput 
     >>= \ userInputMove ->
-        displayState $ updateState state (userInputChar userInputMove)
+        displayState $ updateState state userInputMove
 
-updateState :: State -> Maybe Vector -> State
+updateIndividualPlayer :: Player -> Maybe Vector -> Player
+updateIndividualPlayer player@(Player {movement = movementVariable}) userInputMove =
+    player {
+        movement = userInputMove <|> movementVariable
+    }
+
+updateMovePlayer :: State -> Maybe Char -> State
+updateMovePlayer  state@(State{player1 = player1Variable, player2 = player2Variable}) userInputMove@(Just inputVector) =
+       state {
+            player1 = updateIndividualPlayer player1Variable (player1InputChar userInputMove),
+            player2 = updateIndividualPlayer player2Variable (player2InputChar userInputMove)
+        }
+
+updateState :: State -> Maybe Char -> State
 updateState state userInputMove
-    = updateBall $ updatePlayers $ updateMove state userInputMove
-
+    = updateBall $ updateMovePlayer state userInputMove
 
 sample :: Int -> IO a -> IO (Maybe a)
 sample sampleLength getInput
