@@ -12,6 +12,9 @@ import Control.Concurrent.Async
 import Control.Monad.Loops
 import Control.Applicative
 
+import Debug.Trace
+
+
 
 type Vector = (Int, Int)
 
@@ -156,11 +159,18 @@ updateBall state@(State{ ballMovement = (Just vector)})
     | otherwise = state { ball = ball state `move` vector }
 updateBall state = state
 
+updatePlayerPosition :: Player -> Player
+updatePlayerPosition player@(Player{ movement = Just playerMovement, position = playerPosition }) =
+    player {
+        position = applyMovement playerMovement playerPosition
+    }
+
+
 -- I want this to be the function that is used to update the player
 -- To do, where to update the players already inside of the state ?
--- updatePlayers :: State -> State
--- updatePlayers state@(State{player1 = player1Variable, player2 = player2Variable})
---     state { player1 = applyMovement movement position player1Variable  , player2 = applyMovement movement position player2Variable }
+updatePlayers :: State -> State
+updatePlayers state@(State{player1 = player1Variable, player2 = player2Variable}) =
+    state { player1 = updatePlayerPosition player1Variable  , player2 = updatePlayerPosition player2Variable }
 
 -- TODO here is where you should start to distinguish between the two
 step :: State -> IO State
@@ -180,10 +190,15 @@ updateMovePlayer  state@(State{player1 = player1Variable, player2 = player2Varia
             player1 = updateIndividualPlayer player1Variable (player1InputChar userInputMove),
             player2 = updateIndividualPlayer player2Variable (player2InputChar userInputMove)
         }
+updateMovePlayer state@(State{player1 = player1Variable, player2 = player2Variable}) userInputMove@(Nothing) =
+          state {
+               player1 = updateIndividualPlayer player1Variable (player1InputChar userInputMove),
+               player2 = updateIndividualPlayer player2Variable (player2InputChar userInputMove)
+           }
 
 updateState :: State -> Maybe Char -> State
 updateState state userInputMove
-    = updateBall $ updateMovePlayer state userInputMove
+    = updateBall $ updatePlayers $ updateMovePlayer state userInputMove
 
 sample :: Int -> IO a -> IO (Maybe a)
 sample sampleLength getInput
