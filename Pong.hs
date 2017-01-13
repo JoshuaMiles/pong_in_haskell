@@ -19,7 +19,7 @@ type Vector = (Int, Int)
 
 data Player = Player
   { position :: [Vector]
-  , movement :: Maybe Vector
+  , movement :: Vector
   , score :: Int
   , lives :: Int
   } deriving (Show)
@@ -29,7 +29,7 @@ data State = State
   , player1 :: Player
   , player2 :: Player
   , ball :: Vector
-  , ballMovement :: Maybe Vector
+  , ballMovement :: Vector
   } deriving (Show)
 
 main :: IO State
@@ -37,15 +37,15 @@ main =
   clearScreen >> initialState initialPlayer1 initialPlayer2 >>=
   iterateUntilM gameOver step
 
-player1InputChar :: Maybe Char -> Maybe Vector
-player1InputChar (Just 'a') = Just (-1, 0)
-player1InputChar (Just 's') = Just (1, 0)
-player1InputChar _ = Just (0, 0)
+player1InputChar :: Maybe Char -> Vector
+player1InputChar (Just 'a') = (-1, 0)
+player1InputChar (Just 's') = (1, 0)
+player1InputChar _ = (0, 0)
 
-player2InputChar :: Maybe Char -> Maybe Vector
-player2InputChar (Just 'k') = Just (-1, 0)
-player2InputChar (Just 'l') = Just (1, 0)
-player2InputChar _ = Just (0, 0)
+player2InputChar :: Maybe Char -> Vector
+player2InputChar (Just 'k') = (-1, 0)
+player2InputChar (Just 'l') = (1, 0)
+player2InputChar _ = (0, 0)
 
 displayState :: State -> IO State
 displayState state = setCursorPosition 0 0 >> putStr (render state) >> return state
@@ -79,12 +79,8 @@ characterForPosition State {player1 = player1Variable
                            ,ball = currentBall} position
   | position `elem` getPosition player1Variable = '_'
   | position `elem` getPosition player2Variable = '_'
-  | currentBall `ballPositionEquals` position = 'O'
+  | currentBall == position = 'O'
   | otherwise = ' '
-
-ballPositionEquals :: Vector -> Vector -> Bool
-ballPositionEquals position vector = position == vector
-ballPositionEquals _ _ = False
 
 getInput :: IO Char
 getInput = hSetEcho stdin False >> hSetBuffering stdin NoBuffering >> getChar
@@ -112,13 +108,13 @@ initialState player1Variable player2Variable =
        , player1 = player1Variable
        , player2 = player2Variable
        , ball = (5, 5)
-       , ballMovement = Just (1, 1)
+       , ballMovement = ballMove (1, 1) 30.0
        }
 
 initialPlayer1 =
   Player
   { position = [(14, 2), (15, 2), (16, 2)]
-  , movement = Just (0, 0)
+  , movement = (0, 0)
   , score = 0
   , lives = 3
   }
@@ -126,49 +122,72 @@ initialPlayer1 =
 initialPlayer2 =
   Player
   { position = [(14, 28), (15, 28), (16, 28)]
-  , movement = Just (0, 0)
+  , movement = (0, 0)
   , score = 0
   , lives = 3
   }
 
-bounceVertical :: Vector -> Maybe Vector
-bounceVertical (x, y) = Just (x, -y)
+ballMove :: Vector -> Float -> Vector
+ballMove position@(dx, dy) degree =
+  ( ceiling ((fromIntegral dx :: Float) * c + s * (fromIntegral dy :: Float))
+  , ceiling ((fromIntegral dx :: Float) * (-s) + c * (fromIntegral dy :: Float)))
+  where
+    radians = degree * (pi / 180)
+    s = sin radians
+    c = cos radians
 
-bounceHorizontal :: Vector -> Maybe Vector
-bounceHorizontal (x, y) = Just (-x, y)
+bounceVertical :: Vector -> Vector
+bounceVertical (x, y) = (x, -y)
+
+bounceHorizontal :: Vector -> Vector
+bounceHorizontal (x, y) = (-x, y)
 
 vectorOpposite :: Vector -> Vector
 vectorOpposite (x, y) = (-x, -y)
 
 move :: Vector -> Vector -> Vector
-move (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
+move (x1, y1) (x2, y2) =(x1 + x2, y1 + y2)
 
-applyMovement :: Maybe Vector -> [Vector] -> [Vector]
-applyMovement (Just movement) vector = map (move movement) vector
+moveFurther :: Vector -> Vector -> Vector
+moveFurther (x1, y1) (x2, y2) = (x1 + x2 - 3, y1 + y2)
+
+applyMovement :: Vector -> [Vector] -> [Vector]
+applyMovement movement vector = map (move movement) vector
 
 ballHittingHorizontalWall :: State -> Bool
 ballHittingHorizontalWall State {board = boardSize
-                                ,ball = (currentBall@(ballX, ballY))}
-  | ballY - 2 >= boardSize || ballY <= 0 = (traceShow ballY) (trace "Y True") True
-  | otherwise = (traceShow ballY) (trace "Y false") False
+                                ,ball = (currentBall@(ballX, _))}
+  | ballX > boardSize - 2 = True
+  | ballX - 2 <= 0 = True
+  | otherwise = False
 
 ballHittingVerticalWall :: State -> Bool
 ballHittingVerticalWall State {board = boardSize
-                              ,ball = (currentBall@(ballX, ballY))}
-  | ballX - 2 >= boardSize || ballX + 1 < 0 =
-    (traceShow ballX) (trace "X true") True
-  | otherwise = (traceShow ballX) (trace "X False") False
+                              ,ball = (currentBall@(_, ballY))}
+  | ballY >= boardSize - 1 = True
+  | ballY - 1 < 0 = True
+  | otherwise = False
+
+moveHorizontal :: Vector -> Vector -> Vector
+moveHorizontal (x1, y1) (x2, y2) =(x1 - x2, y1 + y2)
+
+moveVertical :: Vector -> Vector -> Vector
+moveVertical(x1, y1) (x2, y2) =(x1 + x2, y1 - y2)
+
+
 
 updateBall :: State -> State
 updateBall state@(State {ball = ballVariable
-                        ,ballMovement = (Just vector)})
+                        ,ballMovement = vector})
   | ballHittingVerticalWall state =
     state
     { ballMovement = bounceVertical vector
+    , ball = ball state `moveVertical` vector
     }
   | ballHittingHorizontalWall state =
     state
     { ballMovement = bounceHorizontal vector
+    , ball = ball state `moveHorizontal` vector
     }
   | otherwise =
     state
@@ -177,12 +196,10 @@ updateBall state@(State {ball = ballVariable
 
 updatePlayerPosition :: Player -> Player
 updatePlayerPosition player@(Player {movement = playerMovement
-                                    ,position = playerPosition})
-  | isJust playerMovement =
-    player
-    { position = applyMovement playerMovement playerPosition
-    }
-  | otherwise = player
+                                    ,position = playerPosition}) =
+  player
+  { position = applyMovement playerMovement playerPosition
+  }
 
 -- I want this to be the function that is used to update the player
 -- To do, where to update the players already inside of the state ?
@@ -199,10 +216,10 @@ step state =
   sample sampleLength getInput >>=
   \userInputMove -> displayState $ updateState state userInputMove
 
-updateIndividualPlayer :: Player -> Maybe Vector -> Player
-updateIndividualPlayer player@(Player {movement = movementVariable}) userInputMove =
+updateIndividualPlayer :: Player -> Vector -> Player
+updateIndividualPlayer player userInputMove =
   player
-  { movement = userInputMove <|> movementVariable
+  { movement = userInputMove
   }
 
 updateMovePlayer :: State -> Maybe Char -> State
