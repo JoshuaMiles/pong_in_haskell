@@ -15,13 +15,21 @@ import Control.Monad.Loops
 
 import Debug.Trace
 
+{-
+
+,------.            ,--.                ,---.             ,--.    ,--------.
+|  .-.  \  ,--,--.,-'  '-. ,--,--.     /  O  \ ,--,--,  ,-|  |    '--.  .--',--. ,--.,---.  ,---.  ,---.
+|  |  \  :' ,-.  |'-.  .-'' ,-.  |    |  .-.  ||      \' .-. |       |  |    \  '  /| .-. || .-. :(  .-'
+|  '--'  /\ '-'  |  |  |  \ '-'  |    |  | |  ||  ||  |\ `-' |       |  |     \   ' | '-' '\   --..-'  `)
+`-------'  `--`--'  `--'   `--`--'    `--' `--'`--''--' `---'        `--'   .-'  /  |  |-'  `----'`----'
+-}
+
 type Vector = (Int, Int)
 
 data Player = Player
   { position :: [Vector]
   , movement :: Vector
-  , score :: Int
-  , lives :: Int
+  , scoreAndLives :: Vector
   } deriving (Show)
 
 data State = State
@@ -32,20 +40,25 @@ data State = State
   , ballMovement :: Vector
   } deriving (Show)
 
+
+-- The main loop
+
 main :: IO State
 main =
   clearScreen >> initialState initialPlayer1 initialPlayer2 >>=
   iterateUntilM gameOver step
 
-player1InputChar :: Maybe Char -> Vector
-player1InputChar (Just 'a') = (-1, 0)
-player1InputChar (Just 's') = (1, 0)
-player1InputChar _ = (0, 0)
+{-
 
-player2InputChar :: Maybe Char -> Vector
-player2InputChar (Just 'k') = (-1, 0)
-player2InputChar (Just 'l') = (1, 0)
-player2InputChar _ = (0, 0)
+
+,------.  ,--.              ,--.                     ,------.                        ,--.  ,--.
+|  .-.  \ `--' ,---.  ,---. |  | ,--,--.,--. ,--.    |  .---',--.,--.,--,--,  ,---.,-'  '-.`--' ,---. ,--,--,  ,---.
+|  |  \  :,--.(  .-' | .-. ||  |' ,-.  | \  '  /     |  `--, |  ||  ||      \| .--''-.  .-',--.| .-. ||      \(  .-'
+|  '--'  /|  |.-'  `)| '-' '|  |\ '-'  |  \   '      |  |`   '  ''  '|  ||  |\ `--.  |  |  |  |' '-' '|  ||  |.-'  `)
+`-------' `--'`----' |  |-' `--' `--`--'.-'  /       `--'     `----' `--''--' `---'  `--'  `--' `---' `--''--'`----'
+
+-}
+
 
 displayState :: State -> IO State
 displayState state = setCursorPosition 0 0 >> putStr (render state) >> return state
@@ -89,7 +102,7 @@ getInput = hSetEcho stdin False >> hSetBuffering stdin NoBuffering >> getChar
 gameOver :: State -> Bool
 gameOver State {player1 = player1Variable
                ,player2 = player2Variable}
-  | lives player1Variable <= 0 || lives player2Variable <= 0 = True
+  | snd (scoreAndLives player1Variable) <= 0 && snd (scoreAndLives  player2Variable) <= 0 = True
   | otherwise = False
 
 oneSecond :: Int
@@ -113,86 +126,72 @@ initialState player1Variable player2Variable =
 
 initialPlayer1 =
   Player
-  { position = [(14, 2), (15, 2), (16, 2)]
+  { position = [(27, 2), (28, 2), (29, 2)]
   , movement = (0, 0)
-  , score = 0
-  , lives = 3
+  , scoreAndLives = (0, 3)
   }
 
 initialPlayer2 =
   Player
   { position = [(14, 28), (15, 28), (16, 28)]
   , movement = (0, 0)
-  , score = 0
-  , lives = 3
+  , scoreAndLives = (0, 3)
   }
 
-ballMove :: Vector -> Float -> Vector
-ballMove position@(dx, dy) degree =
-  ( ceiling ((fromIntegral dx :: Float) * c + s * (fromIntegral dy :: Float))
-  , ceiling ((fromIntegral dx :: Float) * (-s) + c * (fromIntegral dy :: Float)))
+getLastElement :: [Vector] -> Vector
+getLastElement vectorArray = head (tail (tail vectorArray))
+
+{-
+,------. ,--.                                  ,------.                        ,--.  ,--.
+|  .--. '|  | ,--,--.,--. ,--.,---. ,--.--.    |  .---',--.,--.,--,--,  ,---.,-'  '-.`--' ,---. ,--,--,  ,---.
+|  '--' ||  |' ,-.  | \  '  /| .-. :|  .--'    |  `--, |  ||  ||      \| .--''-.  .-',--.| .-. ||      \(  .-'
+|  | --' |  |\ '-'  |  \   ' \   --.|  |       |  |`   '  ''  '|  ||  |\ `--.  |  |  |  |' '-' '|  ||  |.-'  `)
+`--'     `--' `--`--'.-'  /   `----'`--'       `--'     `----' `--''--' `---'  `--'  `--' `---' `--''--'`----'
+                     `---'
+-}
+-- There is unnecessary code here, handle it when it works
+playerCollisionWithBall :: Player -> Vector -> Bool
+playerCollisionWithBall Player {position = playerPositionArray} ballPosition =
+  playerBottom > ballTop &&
+  playerTop < ballBottom && playerLeft < ballRight && playerRight > ballLeft
   where
-    radians = degree * (pi / 180)
-    s = sin radians
-    c = cos radians
+    playerLeft = fst (head playerPositionArray)
+    playerRight = fst (getLastElement playerPositionArray)
+    playerTop = snd (head playerPositionArray)
+    playerBottom = snd (getLastElement playerPositionArray)
+    ballLeft = fst ballPosition
+    ballRight = fst ballPosition
+    ballTop = snd ballPosition
+    ballBottom = snd ballPosition
 
-bounceVertical :: Vector -> Vector
-bounceVertical (x, y) = (x, -y)
+incrementScore :: Player -> Player
+incrementScore Player {scoreAndLives = (score, lives)} =
+  Player
+  { scoreAndLives = (score + 1, lives)
+  }
 
-bounceHorizontal :: Vector -> Vector
-bounceHorizontal (x, y) = (-x, y)
+decrementLife :: Player -> Player
+decrementLife Player {scoreAndLives = (score, lives)} =
+  Player
+  { scoreAndLives = (score, lives - 1)
+  }
 
-vectorOpposite :: Vector -> Vector
-vectorOpposite (x, y) = (-x, -y)
-
-move :: Vector -> Vector -> Vector
-move (x1, y1) (x2, y2) =(x1 + x2, y1 + y2)
-
-moveFurther :: Vector -> Vector -> Vector
-moveFurther (x1, y1) (x2, y2) = (x1 + x2 - 3, y1 + y2)
-
-applyMovement :: Vector -> [Vector] -> [Vector]
-applyMovement movement vector = map (move movement) vector
-
-ballHittingHorizontalWall :: State -> Bool
-ballHittingHorizontalWall State {board = boardSize
-                                ,ball = (currentBall@(ballX, _))}
-  | ballX > boardSize - 2 = True
-  | ballX - 2 <= 0 = True
-  | otherwise = False
-
-ballHittingVerticalWall :: State -> Bool
-ballHittingVerticalWall State {board = boardSize
-                              ,ball = (currentBall@(_, ballY))}
-  | ballY >= boardSize - 1 = True
-  | ballY - 1 < 0 = True
-  | otherwise = False
-
-moveHorizontal :: Vector -> Vector -> Vector
-moveHorizontal (x1, y1) (x2, y2) =(x1 - x2, y1 + y2)
-
-moveVertical :: Vector -> Vector -> Vector
-moveVertical(x1, y1) (x2, y2) =(x1 + x2, y1 - y2)
-
-
-
-updateBall :: State -> State
-updateBall state@(State {ball = ballVariable
-                        ,ballMovement = vector})
-  | ballHittingVerticalWall state =
+handleBallCollisionWithPlayer :: State -> State
+handleBallCollisionWithPlayer state@(State {player1 = player1Variable
+                                           ,player2 = player2Variable
+                                           ,ballMovement = ballMovementVariable
+                                           ,ball = ballPosition})
+  | playerCollisionWithBall player1Variable ballPosition =
     state
-    { ballMovement = bounceVertical vector
-    , ball = ball state `moveVertical` vector
+    { ball = bounceHorizontal ballMovementVariable
+    , player1 = incrementScore player1Variable
     }
-  | ballHittingHorizontalWall state =
+  | playerCollisionWithBall player2Variable ballPosition =
     state
-    { ballMovement = bounceHorizontal vector
-    , ball = ball state `moveHorizontal` vector
+    { ball = bounceHorizontal ballMovementVariable
+    , player2 = incrementScore player2Variable
     }
-  | otherwise =
-    state
-    { ball = ball state `move` vector
-    }
+  | otherwise = state
 
 updatePlayerPosition :: Player -> Player
 updatePlayerPosition player@(Player {movement = playerMovement
@@ -210,11 +209,6 @@ updatePlayers state@(State {player1 = player1Variable
   { player1 = updatePlayerPosition player1Variable
   , player2 = updatePlayerPosition player2Variable
   }
-
-step :: State -> IO State
-step state =
-  sample sampleLength getInput >>=
-  \userInputMove -> displayState $ updateState state userInputMove
 
 updateIndividualPlayer :: Player -> Vector -> Player
 updateIndividualPlayer player userInputMove =
@@ -240,8 +234,125 @@ updateMovePlayer state@(State {player1 = player1Variable
     updateIndividualPlayer player2Variable (player2InputChar userInputMove)
   }
 
+applyMovement :: Vector -> [Vector] -> [Vector]
+applyMovement movement vector = map (move movement) vector
+
+
+player1InputChar :: Maybe Char -> Vector
+player1InputChar (Just 'a') = (-1, 0)
+player1InputChar (Just 's') = (1, 0)
+player1InputChar _ = (0, 0)
+
+player2InputChar :: Maybe Char -> Vector
+player2InputChar (Just 'k') = (-1, 0)
+player2InputChar (Just 'l') = (1, 0)
+player2InputChar _ = (0, 0)
+
+
+
+{-
+,-----.          ,--.,--.    ,------.                        ,--.  ,--.
+|  |) /_  ,--,--.|  ||  |    |  .---',--.,--.,--,--,  ,---.,-'  '-.`--' ,---. ,--,--,  ,---.
+|  .-.  \' ,-.  ||  ||  |    |  `--, |  ||  ||      \| .--''-.  .-',--.| .-. ||      \(  .-'
+|  '--' /\ '-'  ||  ||  |    |  |`   '  ''  '|  ||  |\ `--.  |  |  |  |' '-' '|  ||  |.-'  `)
+`------'  `--`--'`--'`--'    `--'     `----' `--''--' `---'  `--'  `--' `---' `--''--'`----'
+-}
+bounceVertical :: Vector -> Vector
+bounceVertical (x, y) = (-x, y)
+
+bounceHorizontal :: Vector -> Vector
+bounceHorizontal (x, y) = (x, -y)
+
+vectorOpposite :: Vector -> Vector
+vectorOpposite (x, y) = (-x, -y)
+
+move :: Vector -> Vector -> Vector
+move (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
+
+ballHittingTopWall :: State -> Bool
+ballHittingTopWall State {board = boardSize
+                         ,ball = (currentBall@(_, ballY))}
+  | ballY - 2 <= 0 = True
+  | otherwise = False
+
+ballHittingBottomWall :: State -> Bool
+ballHittingBottomWall State {board = boardSize
+                            ,ball = (currentBall@(_, ballY))}
+  | ballY - 2 <= 0 = True
+  | otherwise = False
+
+ballHittingVerticalWall :: State -> Bool
+ballHittingVerticalWall State {board = boardSize
+                                ,ball = (currentBall@(ballX, _))}
+  | ballX > boardSize - 2 = (trace "vertical true") (traceShow ballX) True
+  | ballX - 2 <= 0 = True
+  | otherwise = False
+
+moveVertical :: Vector -> Vector -> Vector
+moveVertical (x1, y1) (x2, y2) = (x1 - x2, y1 + y2)
+
+moveHorizontal :: Vector -> Vector -> Vector
+moveHorizontal (x1, y1) (x2, y2) = (x1 + x2, y1 - y2)
+
+ballMove :: Vector -> Float -> Vector
+ballMove position@(dx, dy) degree =
+  ( ceiling ((fromIntegral dx :: Float) * c + s * (fromIntegral dy :: Float))
+  , ceiling ((fromIntegral dx :: Float) * (-s) + c * (fromIntegral dy :: Float)))
+  where
+    radians = degree * (pi / 180)
+    s = sin radians
+    c = cos radians
+
+-- TODO make this random at some point and include the angle of movement
+-- ballReset :: Vector
+-- ballReset vector =  (5, 5)
+
+updateBall :: State -> State
+updateBall state@(State {ball = ballVariable
+                        ,ballMovement = vector
+                        ,player1 = player1Variable
+                        ,player2 = player2Variable})
+  | ballHittingVerticalWall state =
+    state
+    { ballMovement = bounceVertical vector
+    , ball = ball state `moveVertical` vector
+    }
+  | ballHittingTopWall state =
+    state
+    { ball = (5,5)
+    , player1 = decrementLife player1Variable
+    }
+  | ballHittingBottomWall state =
+  state
+  { ball = (5,5),
+    player2 = decrementLife player2Variable
+  }
+  | otherwise =
+    state
+    { ball = ball state `move` vector
+    }
+
+
+{-
+
+,--.   ,--.,--.                 ,------.                        ,--.  ,--.
+|   `.'   |`--' ,---.  ,---.    |  .---',--.,--.,--,--,  ,---.,-'  '-.`--' ,---. ,--,--,  ,---.
+|  |'.'|  |,--.(  .-' | .--'    |  `--, |  ||  ||      \| .--''-.  .-',--.| .-. ||      \(  .-'
+|  |   |  ||  |.-'  `)\ `--.    |  |`   '  ''  '|  ||  |\ `--.  |  |  |  |' '-' '|  ||  |.-'  `)
+`--'   `--'`--'`----'  `---'    `--'     `----' `--''--' `---'  `--'  `--' `---' `--''--'`----'
+
+-}
+
+--         todo make a ballResetfunction
+--       todo check if this is player 1 or player2
+step :: State -> IO State
+step state =
+  sample sampleLength getInput >>=
+  \userInputMove -> displayState $ updateState state userInputMove
+
 updateState :: State -> Maybe Char -> State
 updateState state userInputMove =
+  handleBallCollisionWithPlayer $
   updateBall $ updatePlayers $ updateMovePlayer state userInputMove
 
 sample :: Int -> IO a -> IO (Maybe a)
