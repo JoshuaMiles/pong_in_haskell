@@ -1,14 +1,10 @@
-{-# OPTIONS_GHC -Wall -Wunused-matches #-}
-
-import Data.List
-import Data.Maybe
+{-# OPTIONS_GHC -Wall -Wunused-matches -Wname-shadowing #-}
 
 import System.Console.ANSI
 import System.IO
 import System.Random
 import System.Timeout
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad.Loops
@@ -16,7 +12,6 @@ import Control.Monad.Loops
 import Debug.Trace
 
 {-
-
 ,------.            ,--.                ,---.             ,--.    ,--------.
 |  .-.  \  ,--,--.,-'  '-. ,--,--.     /  O  \ ,--,--,  ,-|  |    '--.  .--',--. ,--.,---.  ,---.  ,---.
 |  |  \  :' ,-.  |'-.  .-'' ,-.  |    |  .-.  ||      \' .-. |       |  |    \  '  /| .-. || .-. :(  .-'
@@ -102,7 +97,7 @@ getInput = hSetEcho stdin False >> hSetBuffering stdin NoBuffering >> getChar
 gameOver :: State -> Bool
 gameOver State {player1 = player1Variable
                ,player2 = player2Variable}
-  | snd (scoreAndLives player1Variable) <= 0 && snd (scoreAndLives  player2Variable) <= 0 = True
+  | snd (scoreAndLives player1Variable) <= 0 || snd (scoreAndLives  player2Variable) <= 0 = True
   | otherwise = False
 
 oneSecond :: Int
@@ -128,20 +123,21 @@ initialPlayer1 =
   Player
   { position = [(27, 2), (28, 2), (29, 2)]
   , movement = (0, 0)
-  , scoreAndLives = (0, 3)
+  , scoreAndLives = (0, 2)
   }
 
 initialPlayer2 =
   Player
   { position = [(14, 28), (15, 28), (16, 28)]
   , movement = (0, 0)
-  , scoreAndLives = (0, 3)
+  , scoreAndLives = (0, 2)
   }
 
 getLastElement :: [Vector] -> Vector
 getLastElement vectorArray = head (tail (tail vectorArray))
 
 {-
+
 ,------. ,--.                                  ,------.                        ,--.  ,--.
 |  .--. '|  | ,--,--.,--. ,--.,---. ,--.--.    |  .---',--.,--.,--,--,  ,---.,-'  '-.`--' ,---. ,--,--,  ,---.
 |  '--' ||  |' ,-.  | \  '  /| .-. :|  .--'    |  `--, |  ||  ||      \| .--''-.  .-',--.| .-. ||      \(  .-'
@@ -152,8 +148,8 @@ getLastElement vectorArray = head (tail (tail vectorArray))
 -- There is unnecessary code here, handle it when it works
 playerCollisionWithBall :: Player -> Vector -> Bool
 playerCollisionWithBall Player {position = playerPositionArray} ballPosition =
-  playerBottom > ballTop &&
-  playerTop < ballBottom && playerLeft < ballRight && playerRight > ballLeft
+  playerBottom >= ballTop &&
+  playerTop <= ballBottom && playerLeft <= ballRight && playerRight >= ballLeft
   where
     playerLeft = fst (head playerPositionArray)
     playerRight = fst (getLastElement playerPositionArray)
@@ -165,14 +161,14 @@ playerCollisionWithBall Player {position = playerPositionArray} ballPosition =
     ballBottom = snd ballPosition
 
 incrementScore :: Player -> Player
-incrementScore Player {scoreAndLives = (score, lives)} =
-  Player
+incrementScore player@(Player {scoreAndLives = (score, lives)}) =
+  player
   { scoreAndLives = (score + 1, lives)
   }
 
 decrementLife :: Player -> Player
-decrementLife Player {scoreAndLives = (score, lives)} =
-  Player
+decrementLife player@(Player {scoreAndLives = (score, lives)}) =
+  player
   { scoreAndLives = (score, lives - 1)
   }
 
@@ -183,12 +179,12 @@ handleBallCollisionWithPlayer state@(State {player1 = player1Variable
                                            ,ball = ballPosition})
   | playerCollisionWithBall player1Variable ballPosition =
     state
-    { ball = bounceHorizontal ballMovementVariable
+    { ballMovement = bounceHorizontal ballMovementVariable
     , player1 = incrementScore player1Variable
     }
   | playerCollisionWithBall player2Variable ballPosition =
     state
-    { ball = bounceHorizontal ballMovementVariable
+    { ballMovement = bounceHorizontal ballMovementVariable
     , player2 = incrementScore player2Variable
     }
   | otherwise = state
@@ -200,8 +196,6 @@ updatePlayerPosition player@(Player {movement = playerMovement
   { position = applyMovement playerMovement playerPosition
   }
 
--- I want this to be the function that is used to update the player
--- To do, where to update the players already inside of the state ?
 updatePlayers :: State -> State
 updatePlayers state@(State {player1 = player1Variable
                            ,player2 = player2Variable}) =
@@ -218,15 +212,7 @@ updateIndividualPlayer player userInputMove =
 
 updateMovePlayer :: State -> Maybe Char -> State
 updateMovePlayer state@(State {player1 = player1Variable
-                              ,player2 = player2Variable}) userInputMove@(Just inputVector) =
-  state
-  { player1 =
-    updateIndividualPlayer player1Variable (player1InputChar userInputMove)
-  , player2 =
-    updateIndividualPlayer player2Variable (player2InputChar userInputMove)
-  }
-updateMovePlayer state@(State {player1 = player1Variable
-                              ,player2 = player2Variable}) userInputMove@(Nothing) =
+                              ,player2 = player2Variable}) userInputMove =
   state
   { player1 =
     updateIndividualPlayer player1Variable (player1InputChar userInputMove)
@@ -263,28 +249,24 @@ bounceVertical (x, y) = (-x, y)
 bounceHorizontal :: Vector -> Vector
 bounceHorizontal (x, y) = (x, -y)
 
-vectorOpposite :: Vector -> Vector
-vectorOpposite (x, y) = (-x, -y)
-
 move :: Vector -> Vector -> Vector
 move (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
 
 ballHittingTopWall :: State -> Bool
 ballHittingTopWall State {board = boardSize
                          ,ball = (currentBall@(_, ballY))}
-  | ballY - 2 <= 0 = True
-  | otherwise = False
+  | ballY > boardSize - 2 = True
+  | otherwise =  False
 
-ballHittingBottomWall :: State -> Bool
-ballHittingBottomWall State {board = boardSize
-                            ,ball = (currentBall@(_, ballY))}
+-- todo never getting to this point
+ballHittingBottomWall State {ball = (_, ballY)}
   | ballY - 2 <= 0 = True
-  | otherwise = False
+  | otherwise =  False
 
 ballHittingVerticalWall :: State -> Bool
 ballHittingVerticalWall State {board = boardSize
                                 ,ball = (currentBall@(ballX, _))}
-  | ballX > boardSize - 2 = (trace "vertical true") (traceShow ballX) True
+  | ballX > boardSize - 2 = True
   | ballX - 2 <= 0 = True
   | otherwise = False
 
@@ -295,7 +277,7 @@ moveHorizontal :: Vector -> Vector -> Vector
 moveHorizontal (x1, y1) (x2, y2) = (x1 + x2, y1 - y2)
 
 ballMove :: Vector -> Float -> Vector
-ballMove position@(dx, dy) degree =
+ballMove (dx, dy) degree =
   ( ceiling ((fromIntegral dx :: Float) * c + s * (fromIntegral dy :: Float))
   , ceiling ((fromIntegral dx :: Float) * (-s) + c * (fromIntegral dy :: Float)))
   where
@@ -308,8 +290,7 @@ ballMove position@(dx, dy) degree =
 -- ballReset vector =  (5, 5)
 
 updateBall :: State -> State
-updateBall state@(State {ball = ballVariable
-                        ,ballMovement = vector
+updateBall state@(State {ballMovement = vector
                         ,player1 = player1Variable
                         ,player2 = player2Variable})
   | ballHittingVerticalWall state =
@@ -319,13 +300,15 @@ updateBall state@(State {ball = ballVariable
     }
   | ballHittingTopWall state =
     state
-    { ball = (5,5)
+    { ball =  (15,15)
     , player1 = decrementLife player1Variable
+    , ballMovement = ballMove (1, 1) 30.0
     }
   | ballHittingBottomWall state =
   state
-  { ball = (5,5),
-    player2 = decrementLife player2Variable
+  { ball = (15,15),
+    player2 = decrementLife player2Variable,
+    ballMovement = ballMove (1, 1) 30.0
   }
   | otherwise =
     state
